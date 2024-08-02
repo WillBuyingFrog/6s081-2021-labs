@@ -163,6 +163,11 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  
+  // lab syscall
+  // syscall: trace
+  p->trace_mask = 0;
+
   p->state = UNUSED;
 }
 
@@ -278,6 +283,7 @@ fork(void)
 
   // Allocate process.
   if((np = allocproc()) == 0){
+    // printf("No process\n");
     return -1;
   }
 
@@ -285,6 +291,7 @@ fork(void)
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
+    // printf("No enough memory\n");
     return -1;
   }
   np->sz = p->sz;
@@ -300,6 +307,12 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  // lab syscall
+  // syscall: trace
+  np->trace_mask = p->trace_mask;
+
+  // printf("hello\n");
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
