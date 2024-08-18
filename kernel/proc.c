@@ -667,3 +667,20 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+uint64
+count_active_proc(void)
+{
+  uint64 counter;
+  struct proc *p;
+
+  counter = 0;
+
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED){
+      counter = counter + 1;
+    }
+  }
+  return counter;
+}

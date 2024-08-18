@@ -59,6 +59,9 @@ kfree(void *pa)
   acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
+  // if((uint64)r == 0x0000000080027000){
+  //   printf("next chunk for 0x0000000080027000 is %p\n", r->next);
+  // }
   release(&kmem.lock);
 }
 
@@ -79,4 +82,33 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+// lab syscall
+// sysinfo
+
+uint64
+count_free_memory(void)
+{
+  uint64 counter;
+  struct run *init_run;
+  init_run = kmem.freelist;
+  if(init_run){
+    // 如果freelist存在，那么从freelist开始不断遍历，直到回到freelist
+    struct run *r;
+    r = init_run;
+    // 至少有一页的内存
+    counter = 1;
+    while(1){
+      if((uint64)r->next >= PHYSTOP || (char*)r->next < end){
+        break;
+      }
+      r = r->next;
+      counter = counter + 1;
+    }
+    counter = counter * PGSIZE;
+    return counter;
+  }else{
+    return 0;
+  }
 }
