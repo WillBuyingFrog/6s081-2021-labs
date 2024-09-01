@@ -104,5 +104,7 @@ struct proc {
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
+  // lab pgtbl
+  struct usyscall *usyscall_info;
   char name[16];               // Process name (debugging)
 };

@@ -2,6 +2,7 @@
 #include "kernel/fcntl.h"
 #include "kernel/types.h"
 #include "kernel/riscv.h"
+#include "kernel/memlayout.h"
 #include "user/user.h"
 
 void ugetpid_test();
@@ -41,8 +42,13 @@ ugetpid_test()
         exit(1);
       continue;
     }
+    printf("USYSCALL %p\n", USYSCALL);
+    struct usyscall *u = (struct usyscall *)USYSCALL;
+    printf("pointer %d\n", u->pid);
+    // printf("hi, child\n");
     if (getpid() != ugetpid())
       err("missmatched PID");
+    // printf("bye, child\n");
     exit(0);
   }
   printf("ugetpid_test: OK\n");
