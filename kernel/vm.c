@@ -281,6 +281,37 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+// lab pgtbl
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  for(int i = 0; i < 512; i++){
+    pte_t pte_level2 = pagetable[i];
+    if(pte_level2 & PTE_V){
+      // 一个合法的第二层页表项
+      printf("..%d: pte %p pa %p\n", i, pte_level2, PTE2PA(pte_level2));
+      pagetable_t pagetable_level1 = (pagetable_t)PTE2PA(pte_level2);
+      for(int j = 0; j < 512; j++){
+        pte_t pte_level1 = pagetable_level1[j];
+        if(pte_level1 & PTE_V){
+          // 一个合法的第一层页表项
+          printf(".. ..%d: pte %p pa %p\n", j, pte_level1, PTE2PA(pte_level1));
+          pagetable_t pagetable_level0 = (pagetable_t)PTE2PA(pte_level1);
+          for(int k = 0; k < 512; k++){
+            pte_t pte_level0 = pagetable_level0[k];
+            if(pte_level0 & PTE_V){
+              // 一个合法的第0级页表项
+              printf(".. .. ..%d: pte %p pa %p\n", k, pte_level0, PTE2PA(pte_level0));
+            }
+          }
+        }
+      }
+      
+    }
+  }
+}
+
 // Free user memory pages,
 // then free page-table pages.
 void
