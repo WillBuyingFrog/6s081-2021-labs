@@ -118,6 +118,7 @@ void
 panic(char *s)
 {
   pr.locking = 0;
+  backtrace();
   printf("panic: ");
   printf(s);
   printf("\n");
@@ -131,4 +132,26 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+
+void
+backtrace(void)
+{
+  uint64 current_fp;
+  current_fp = r_fp();
+  printf("backtrace:\n");
+  while(1){
+    uint64 current_saved_ret;
+    current_saved_ret = *((uint64*)(current_fp - 8));
+    printf("%p\n", current_saved_ret);
+    uint64 next_fp;
+    next_fp = *((uint64*)(current_fp - 16));
+    printf("corresponding current_fp and next_fp: %p, %p(<-%p)\n", current_fp, next_fp, ((uint64*)(current_fp - 16)));
+    if(PGROUNDUP(next_fp) == next_fp){
+      break;
+    }
+    printf("Top of next_fp and next_fp: %p, %p\n", PGROUNDUP(next_fp), next_fp);
+    current_fp = next_fp;
+  }
 }
