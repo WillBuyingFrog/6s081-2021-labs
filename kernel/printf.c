@@ -147,11 +147,11 @@ backtrace(void)
     printf("%p\n", current_saved_ret);
     uint64 next_fp;
     next_fp = *((uint64*)(current_fp - 16));
-    printf("corresponding current_fp and next_fp: %p, %p(<-%p)\n", current_fp, next_fp, ((uint64*)(current_fp - 16)));
+    // printf("corresponding current_fp and next_fp: %p, %p(<-%p)\n", current_fp, next_fp, ((uint64*)(current_fp - 16)));
     if(PGROUNDUP(next_fp) == next_fp){
       break;
     }
-    printf("Top of next_fp and next_fp: %p, %p\n", PGROUNDUP(next_fp), next_fp);
+    // printf("Top of next_fp and next_fp: %p, %p\n", PGROUNDUP(next_fp), next_fp);
     current_fp = next_fp;
   }
 }

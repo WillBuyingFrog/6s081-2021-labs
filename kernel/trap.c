@@ -49,6 +49,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
+
+  
   
   if(r_scause() == 8){
     // system call
@@ -71,6 +73,28 @@ usertrap(void)
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
+  }
+
+  if(which_dev == 2 && myproc() != 0 && myproc()->alarm_interval > 0 && myproc()->alarm_is_calling == 0){
+    if((uint64)(myproc()->alarm_handler) != (MAXVA + 1)){
+      // 已经设置了handler
+      // printf("hi");
+      // printf("alarm_handler is at address %p\n", myproc()->alarm_handler);
+      if((myproc()->alarm_interval == -1) || (myproc()->ticks_till_next == -1)){
+        // 已经设置了handler却没有设置alarm间隔，是不合法行为
+        panic("alarm: invalid alarm_interval");
+      }
+      myproc()->ticks_till_next -= 1;
+      if(myproc()->ticks_till_next == 0){
+        // 到时间了,应该调用alarm_handler
+        // 在调用handler之前,保存此次陷入trap时用户空间的执行状态
+        memmove((void*)(myproc()->alarm_trapframe), (void*)(myproc()->trapframe), sizeof(struct trapframe));
+        myproc()->ticks_till_next = myproc()->alarm_interval;
+        myproc()->trapframe->epc = (uint64)myproc()->alarm_handler;
+        myproc()->alarm_is_calling = 1;
+        usertrapret();
+      }
+    }
   }
 
   if(p->killed)
@@ -148,6 +172,8 @@ kerneltrap()
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
+
+  
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
