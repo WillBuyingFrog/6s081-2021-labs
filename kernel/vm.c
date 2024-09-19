@@ -312,11 +312,21 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //   kfree(mem);
+    //   goto err;
+    // }
+    
+    // 为子进程map新的页面
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags & (~PTE_W)) != 0){
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    }
+    // 重新map父进程的页面
+    uvmunmap(old, i, 1, 0);
+    if(mappages(old, i, PGSIZE, (uint64)pa, flags & (~PTE_W)) != 0){
       goto err;
     }
   }
