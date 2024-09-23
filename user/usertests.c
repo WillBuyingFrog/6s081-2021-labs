@@ -2677,6 +2677,7 @@ execout(char *s)
 {
   for(int avail = 0; avail < 15; avail++){
     int pid = fork();
+    uint64 counter = 0;
     if(pid < 0){
       printf("fork failed\n");
       exit(1);
@@ -2686,8 +2687,13 @@ execout(char *s)
         uint64 a = (uint64) sbrk(4096);
         if(a == 0xffffffffffffffffLL)
           break;
-        *(char*)(a + 4096 - 1) = 1;
+        counter += 1;
+        if (counter % 1000 == 0){
+          printf("1000 pages\n");
+        }
+        // *(char*)(a + 4096 - 1) = 1;
       }
+
 
       // free a few pages, in order to let exec() make some
       // progress.
@@ -2910,7 +2916,8 @@ main(int argc, char *argv[])
   }
 
   printf("usertests starting\n");
-  int free0 = countfree();
+  // int free0 = countfree();
+  int free0 = 0;
   int free1 = 0;
   int fail = 0;
   for (struct test *t = tests; t->s != 0; t++) {

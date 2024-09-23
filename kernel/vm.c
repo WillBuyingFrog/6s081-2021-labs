@@ -15,6 +15,8 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+extern int cow_count[];
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -167,15 +169,19 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
-
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
+    
+    if((*pte & PTE_V) == 0){
+      printf("Unmapping va %p pa %p perm %p\n", va, PTE2PA(*pte), PTE_FLAGS(*pte));
+      
+      backtrace();
       panic("uvmunmap: not mapped");
+    }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -230,6 +236,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
     if(mem == 0){
+      printf("No free mem %d %d\n", a, oldsz);
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -255,7 +262,9 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
   if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
+    printf("hi1\n");
     uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    printf("hi2\n");
   }
 
   return newsz;
@@ -303,7 +312,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -312,11 +321,23 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    if(flags & PTE_W){
+      flags |= PTE_COW;
+      // 要擦除掉旧页表中对应页表项的写权限
+      flags &= (~(PTE_W));
+      *pte = PA2PTE(pa) | flags;  
+    }
+    // pa物理页的引用+1
+    int cow_index = (pa - KERNBASE) / PGSIZE;
+    cow_count[cow_index] += 1;
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    // 设置新旧页表项中的权限
+
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      // kfree(mem);
       goto err;
     }
   }
@@ -347,10 +368,30 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t *pte;
+  int perm;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    // printf("va0 is %p\n", va0);
+    if(va0 >= MAXVA)
+      return -1;
+    pte = walk(pagetable, va0, 0);
+    if(pte == 0)
+      return -1;
+    // printf("result pte %p\n", pte);
+    perm = PTE_FLAGS(*pte);
+    if(perm & PTE_COW){
+      // 这是一个COW页
+      // 复制页表项对应的物理页到新位置
+      // 使用cow_kalloc函数
+      // printf("Implement cow fork on va %p,\n", va0);
+      pa0 = (uint64)cow_kalloc(pagetable, va0);
+      // printf("Corresponding new pa is %p\n", pa0);
+    } else{
+      pa0 = walkaddr(pagetable, va0);
+    }
+    
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
@@ -430,5 +471,27 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  }
+}
+
+
+void
+backtrace(void)
+{
+  uint64 current_fp;
+  current_fp = r_fp();
+  printf("backtrace:\n");
+  while(1){
+    uint64 current_saved_ret;
+    current_saved_ret = *((uint64*)(current_fp - 8));
+    printf("%p\n", current_saved_ret);
+    uint64 next_fp;
+    next_fp = *((uint64*)(current_fp - 16));
+    // printf("corresponding current_fp and next_fp: %p, %p(<-%p)\n", current_fp, next_fp, ((uint64*)(current_fp - 16)));
+    if(PGROUNDUP(next_fp) == next_fp){
+      break;
+    }
+    // printf("Top of next_fp and next_fp: %p, %p\n", PGROUNDUP(next_fp), next_fp);
+    current_fp = next_fp;
   }
 }

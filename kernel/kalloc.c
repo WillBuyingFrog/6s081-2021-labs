@@ -23,11 +23,16 @@ struct {
   struct run *freelist;
 } kmem;
 
+int cow_count[(PHYSTOP-KERNBASE)/PGSIZE];
+
+int cow_init = 0;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
+  cow_init = 1;
 }
 
 void
@@ -51,6 +56,16 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  int cow_index = ((uint64)pa - KERNBASE) / PGSIZE;
+  if(cow_init && cow_count[cow_index] <= 0)
+    panic("kfree: cow_count");
+  
+  if(cow_count[cow_index] > 1){
+    cow_count[cow_index] -= 1;
+    return;
+  }
+
+  cow_count[cow_index] = 0;
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -76,7 +91,52 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    int cow_index = ((uint64)r - KERNBASE) / PGSIZE;
+    cow_count[cow_index] = 1;
+  }
+  
   return (void*)r;
+}
+
+
+void *
+cow_kalloc(pagetable_t pagetable, uint64 va){
+  // 将pagetable中原来映射虚拟地址va的页表项清除
+  // 然后kalloc一个新的页，复制旧页的内容到新页上
+  // 然后kfree掉旧页对应的物理页
+  // 最后将va映射到新的页上
+  pte_t *pte_old;
+  int old_perm;
+  uint64 old_pa, new_pa;
+
+  if((pte_old = walk(pagetable, va, 0)) == 0)
+    panic("cow_kalloc: old_pte should exist");
+  
+  old_perm = PTE_FLAGS(*pte_old);
+  // 清除掉cow页标记
+  old_perm &= ~(PTE_COW);
+
+  old_pa = PTE2PA(*pte_old);
+
+  printf("Ready to unmap old COW page, va %p, pa %p, perm(without PTE_COW) %p\n", va, old_pa, old_perm);
+
+  uvmunmap(pagetable, va, 1, 1);
+
+  new_pa = (uint64)kalloc();
+
+  if(new_pa == 0){
+    return 0;
+  }
+    
+  
+  memmove((char *)new_pa, (char *)old_pa, PGSIZE);
+
+  // kfree((char*)old_pa);
+
+  if(mappages(pagetable, va, PGSIZE, new_pa, old_perm | PTE_W) < 0){
+    panic("cow_kalloc: new pte should be properly mapped");
+  }
+  return (void*)new_pa;
 }

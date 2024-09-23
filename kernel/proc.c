@@ -204,9 +204,12 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+  // printf("Freeing pagetable\n");
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  // printf("Free complete1\n");
   uvmfree(pagetable, sz);
+  // printf("Free complete2\n");
 }
 
 // a user program that calls exec("/init")
@@ -258,6 +261,7 @@ growproc(int n)
   sz = p->sz;
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+      printf("No free mem a1\n");
       return -1;
     }
   } else if(n < 0){
@@ -302,6 +306,7 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
 
   pid = np->pid;
 

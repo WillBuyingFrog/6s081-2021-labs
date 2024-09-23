@@ -65,6 +65,33 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15){
+    printf("Hi usertrap\n");
+    uint64 cow_va = r_stval();
+    cow_va = PGROUNDDOWN(cow_va);
+    if(cow_va < 0 || cow_va >= MAXVA){
+      p->killed = 1;
+    }else{
+      // 检查是不是COW Page
+      pte_t *pte;
+      pte = walk(p->pagetable, cow_va, 0);
+      // printf("Walk result for va %p: %p\n", cow_va, *pte);
+      if(pte == 0){
+        p->killed = 1;
+      } else if (*pte & PTE_COW){
+        printf("Page fault occured at va %p\n", cow_va);
+        uint64 cow_pa = (uint64)cow_kalloc(p->pagetable, cow_va);
+
+        if(cow_pa == 0){
+          printf("Killed because cow_kalloc failed\n");
+          p->killed = 1;
+        }
+         
+      } else {
+        // 不是COW Page，什么都不做
+        p->killed = 1;
+      }
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

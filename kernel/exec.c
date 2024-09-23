@@ -37,6 +37,7 @@ exec(char *path, char **argv)
 
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
+  
 
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
